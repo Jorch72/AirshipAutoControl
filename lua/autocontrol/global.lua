@@ -1,5 +1,5 @@
 ------- Global variables -------
 
-MAIN_LOOP = 0
+MAIN_LOOP = true
 
 --------------------------------

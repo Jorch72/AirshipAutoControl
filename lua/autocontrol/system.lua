@@ -1,7 +1,10 @@
+loadfile("hardware.lua")
+
 ------------ System ------------
 
-function init()
-  print("System Initialisation")
+function SystemInit()
+  print("System Initialisation ...")
+  HardwareInit()
+  print("System Initialised")
 end
 
---------------------------------
