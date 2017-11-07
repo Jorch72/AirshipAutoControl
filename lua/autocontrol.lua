@@ -3,6 +3,8 @@
 -- Version 0.0.1
 
 os = require("os")
+redstone = require("component.redstone")
+sides = require("sides")
 
 --[[
 mtr_speed(%)     pourcentage of the maximum speed of the craft applied to both motors
@@ -24,20 +26,22 @@ function MotorsInit()
 end
 
 function normaliseSpeed(speed)
-  if speed > 100 then
-    return 100
-  elseif speed < -100 then
-    return -100
+  if speed > 15 then
+    return 15
+  elseif speed < 0 then
+    return 0
   end
 	return speed
 end
 
 function mtr_L(speed)
   speed = normaliseSpeed(speed)
+  redstone.setOutput(sides.left,speed)
 end
 
 function mtr_R(speed)
   speed = normaliseSpeed(speed)
+  redstone.setOutput(sides.right,speed)
 end
 
 function mtr_speed(speed)
@@ -73,7 +77,7 @@ function main()
   SystemInit()
   
   while MAIN_LOOP do
-    os.sleep(1)
+    mtr_L(1)
   end
 end
 main()
