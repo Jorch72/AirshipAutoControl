@@ -25,6 +25,7 @@ local cur_pos          = { x=0, y=0, z=0 } -- (x, y, z)
 local target_pos       = { x=0, y=0, z=0 } -- (x, y, z)
 local user_input       = nil
 local user_input_ready = true
+goToDest               = false
 
 --------------------------------
 ------------ Motors ------------
@@ -82,6 +83,11 @@ local function SystemInit()
   print("System Initialised")
 end
 
+local function AutoTravel()
+  local ship_yaw = ship.getYaw()
+  
+end
+
 function round(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
   return math.floor(num * mult + 0.5) / mult
@@ -91,16 +97,14 @@ local function distance(a, b)
   if (type(a)~="table" or type(b)~="table") then  return -1  end
   return math.sqrt(math.pow(a[1]-b[1],2)+math.pow(a[2]-b[2],2)+math.pow(a[3]-b[3],2))
 end
-function distance(a, b)
-  return math.sqrt(math.pow(a[1]-b[1],2)+math.pow(a[2]-b[2],2)+math.pow(a[3]-b[3],2))
-end
+
 local function Update()
   cur_pos.x, cur_pos.y, cur_pos.z = ship.getPosition()
   
   --Gui Handling--
   local cursor_X, cursor_Y = term.getCursor()
   
-  for i=1,19 do
+  for i=1,6 do
     term.setCursor(1, i)
     term.clearLine()
   end
@@ -112,8 +116,8 @@ local function Update()
   term.write("Distance   : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
   
   
-  term.setCursor(1,19)
-  for i=1,term.window.width do
+  term.setCursor(term.window.width/4,6)
+  for i=1,term.window.width/2 do
     term.write("-")
   end
   term.setCursor(cursor_X, cursor_Y)
@@ -126,11 +130,15 @@ local main_thread = thread.create(function()
   
   while MAIN_LOOP do
     Update()
+    
+    if goToDest then
+      AutoTravel()
+    end
   end
 end)
 
 local user_input_thread = thread.create(function()
-  term.setCursor(1, 20)
+  term.setCursor(1, 7)
   while user_input~="exit" do
     io.write("> ")
     user_input = io.read()
@@ -149,6 +157,10 @@ local user_input_thread = thread.create(function()
       cur_pos.y = io.read()
       io.write("  z: ")
       cur_pos.z = io.read()
+    elseif user_input == "start travel" then
+      goToDest = true;
+    elseif user_input == "stop travel" then
+      goToDest = false;
     end
   end
 end)
