@@ -9,11 +9,12 @@ redstone = component.redstone
 ship = component.ship_interface
 sides = require("sides")
 term.clear()
+mtr_brake()
 
 --[[
 mtr_speed(%)     pourcentage of the maximum speed of the craft applied to both motors
-mtr_L_speed(%)   pourcentage of the maximum speed of the craft applied to the left motor
-mtr_R_speed(%)   pourcentage of the maximum speed of the craft applied to the right motor
+mtr_l(%)   pourcentage of the maximum speed of the craft applied to the left motor
+mtr_r(%)   pourcentage of the maximum speed of the craft applied to the right motor
 mtr_spin(%)      + clockwise, - counterclockwise.
 ]]
 
@@ -21,19 +22,30 @@ mtr_spin(%)      + clockwise, - counterclockwise.
 ------- Global variables -------
 
 local MAIN_LOOP        = true
+
 local cur_pos          = { x=0, y=0, z=0 } -- (x, y, z)
 local target_pos       = { x=0, y=0, z=0 } -- (x, y, z)
+
+local yaw   = ship.getYaw()
+local roll  = ship.getRoll()
+local pitch = ship.getPitch()
+
+local linear_speed = 0        -- meters per second
+local angular_speed = 0
+
 local user_input       = nil
 local user_input_ready = true
-goToDest               = false
+
+local goToDest         = false
 
 --------------------------------
 ------------ Motors ------------
 
 local function MotorsInit()
-  print("    Motors Initialisation ...")
-  
-  print("    Motors Initialised")
+  if not component.isAvailable("redstone") then
+    print("redstone component not available!")
+    os.exit(1)
+  end
 end
 
 local function normaliseSpeed(speed)
@@ -47,12 +59,12 @@ end
 
 local function mtr_l(speed)             --mtr_l
   speed = normaliseSpeed(speed)
-  redstone.setOutput(sides.left,speed)
+  redstone.setOutput(sides.right,speed)
 end
 
 local function mtr_r(speed)             --mtr_r
   speed = normaliseSpeed(speed)
-  redstone.setOutput(sides.right,speed)
+  redstone.setOutput(sides.left,speed)
 end
 
 local function mtr_speed(speed)         --mtr_speed
@@ -66,26 +78,30 @@ local function mtr_spin(speed)           --mtr_spin
   mtr_l(speed)
   mtr_r(-speed)
 end
+
+local function mtr_brake()
+  --WIP
+  
+  mtr_l(0)
+  mtr_r(0)
+end
 --------------------------------
 ----------- Hardware -----------
 
 local function HardwareInit()
-  print("  Hardware Initialisation ...")
   MotorsInit()
-  print("  Hardware Initialised")
+  if not component.isAvailable("ship_interface") then
+    print("ship_interface component not available!")
+    os.exit(1)
+  elseif not component.isAvailable("gpu") then
+    os.exit(1)
+  end
 end
 --------------------------------
 ------------ System ------------
 
 local function SystemInit()
-  print("System Initialisation ...")
   HardwareInit()
-  print("System Initialised")
-end
-
-local function AutoTravel()
-  local ship_yaw = ship.getYaw()
-  
 end
 
 function round(num, numDecimalPlaces)
@@ -98,9 +114,33 @@ local function distance(a, b)
   return math.sqrt(math.pow(a[1]-b[1],2)+math.pow(a[2]-b[2],2)+math.pow(a[3]-b[3],2))
 end
 
+local function AutoTravel()
+  local target_yaw = math.atan((cur_pos.x - target_pos.x) / (cur_pos.z - target_pos.z))
+  local angle_diff  = yaw - target_yaw
+  
+  mtr_speed(1)
+  
+  if ((angle_diff < 170 and angle_diff > 0)         -- Turn left
+  or (angle_diff >= -170 and angle_diff <= 0 )) then
+    mtr_r(0)
+  elseif ((angle_diff > 170 and angle_diff > 0)     -- Turn right
+  or (angle_diff <= -170 and angle_diff <= 0 )) then
+    mtr_l(1)
+  end
+end
+
 local function Update()
   cur_pos.x, cur_pos.y, cur_pos.z = ship.getPosition()
   
+  linear_speed = ship.getLinearSpeed()
+  angular_speed = ship.getAngularSpeed()
+  
+  yaw   = ship.getYaw()
+  roll  = ship.getRoll()
+  pitch = ship.getPitch()
+end
+
+local function Draw()
   --Gui Handling--
   local cursor_X, cursor_Y = term.getCursor()
   
@@ -114,6 +154,11 @@ local function Update()
   term.write("target_pos : "..round(target_pos.x,2)..", "..round(target_pos.y,2)..", "..round(target_pos.z,2))
   term.setCursor(1,3)
   term.write("Distance   : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
+  term.setCursor(1,4)
+  term.write("Yaw        : "..round(yaw, 4))
+  term.setCursor(1,5)
+  term.write("Speed      : "..round(linear_speed, 4).." m/s")
+  
   
   
   term.setCursor(term.window.width/4,6)
@@ -121,7 +166,6 @@ local function Update()
     term.write("-")
   end
   term.setCursor(cursor_X, cursor_Y)
-  os.sleep(0)
 end
 --------------------------------
 
@@ -130,10 +174,15 @@ local main_thread = thread.create(function()
   
   while MAIN_LOOP do
     Update()
+    Draw()
     
     if goToDest then
       AutoTravel()
+    else
+      mtr_brake()
     end
+    
+    os.sleep(0)
   end
 end)
 
@@ -150,13 +199,6 @@ local user_input_thread = thread.create(function()
       target_pos.y = io.read()
       io.write("  z: ")
       target_pos.z = io.read()
-    elseif user_input == "change position" then
-      io.write("  x: ")
-      cur_pos.x = io.read()
-      io.write("  y: ")
-      cur_pos.y = io.read()
-      io.write("  z: ")
-      cur_pos.z = io.read()
     elseif user_input == "start travel" then
       goToDest = true;
     elseif user_input == "stop travel" then
@@ -166,4 +208,5 @@ local user_input_thread = thread.create(function()
 end)
 
 thread.waitForAny({ main_thread, user_input_thread })
+mtr_brake()
 os.exit(0)
