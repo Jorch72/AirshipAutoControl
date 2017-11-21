@@ -9,7 +9,6 @@ redstone = component.redstone
 ship = component.ship_interface
 sides = require("sides")
 term.clear()
-mtr_brake()
 
 --[[
 mtr_speed(%)     pourcentage of the maximum speed of the craft applied to both motors
@@ -111,40 +110,48 @@ end
 
 local function distance(a, b)
   if (type(a)~="table" or type(b)~="table") then  return -1  end
-  return math.sqrt(math.pow(a[1]-b[1],2)+math.pow(a[2]-b[2],2)+math.pow(a[3]-b[3],2))
+  return math.sqrt((a[1]-b[1])^2 + (a[2]-b[2])^2 + (a[3]-b[3])^2)
 end
 
 local function AutoTravel()
+  -- The x and z coordinates change places 
+  -- Ex : before -> (x, z)
+  --      now    -> (z, x)
+  local normalised_yaw = yaw + 180
   local target_yaw = math.atan((cur_pos.x - target_pos.x) / (cur_pos.z - target_pos.z))
   local angle_diff  = yaw - target_yaw
   
   mtr_speed(1)
   
-  if ((angle_diff < 170 and angle_diff > 0)         -- Turn left
-  or (angle_diff >= -170 and angle_diff <= 0 )) then
+  --Broken, needs to be fixed
+  if ((angle_diff < 180 and angle_diff > 0)         -- Turn left
+  or (angle_diff >= -180 and angle_diff <= 0 )) then
     mtr_r(0)
-  elseif ((angle_diff > 170 and angle_diff > 0)     -- Turn right
-  or (angle_diff <= -170 and angle_diff <= 0 )) then
-    mtr_l(1)
+  elseif ((angle_diff > 180 and angle_diff > 0)     -- Turn right
+  or (angle_diff <= -180 and angle_diff <= 0 )) then
+    mtr_l(0)
   end
 end
 
 local function Update()
   cur_pos.x, cur_pos.y, cur_pos.z = ship.getPosition()
   
-  linear_speed = ship.getLinearSpeed()
-  angular_speed = ship.getAngularSpeed()
-  
   yaw   = ship.getYaw()
   roll  = ship.getRoll()
   pitch = ship.getPitch()
+  
+  os.sleep(1)
+  local tmpx, tmpy, tmpz = ship.getPosition()
+  local tmpyaw  = ship.getYaw()
+  linear_speed  = distance({cur_pos.x, cur_pos.y, cur_pos.z}, {tmpx, tmpy, tmpz})
+  angular_speed = yaw - tmpyaw
 end
 
 local function Draw()
   --Gui Handling--
   local cursor_X, cursor_Y = term.getCursor()
   
-  for i=1,6 do
+  for i=1,7 do
     term.setCursor(1, i)
     term.clearLine()
   end
@@ -157,14 +164,13 @@ local function Draw()
   term.setCursor(1,4)
   term.write("Yaw        : "..round(yaw, 4))
   term.setCursor(1,5)
-  term.write("Speed      : "..round(linear_speed, 4).." m/s")
+  term.write("Linear speed      : "..round(linear_speed, 4).." m/s")
+  term.setCursor(1,6)
+  term.write("Angular speed      : "..round(angular_speed, 4).." deg/s")
   
   
-  
-  term.setCursor(term.window.width/4,6)
-  for i=1,term.window.width/2 do
-    term.write("-")
-  end
+  term.setCursor(1,7)
+  term.write("----------------")
   term.setCursor(cursor_X, cursor_Y)
 end
 --------------------------------
@@ -187,8 +193,10 @@ local main_thread = thread.create(function()
 end)
 
 local user_input_thread = thread.create(function()
-  term.setCursor(1, 7)
+  ---[[
   while user_input~="exit" do
+    term.setCursor(1, term.window.height)
+    term.clearLine()
     io.write("> ")
     user_input = io.read()
     
@@ -205,8 +213,9 @@ local user_input_thread = thread.create(function()
       goToDest = false;
     end
   end
+  --]]
 end)
 
-thread.waitForAny({ main_thread, user_input_thread })
+thread.waitForAny({ main_thread--[[, user_input_thread]] })
 mtr_brake()
 os.exit(0)
