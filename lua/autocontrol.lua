@@ -37,6 +37,8 @@ local user_input_ready = true
 
 local goToDest         = false
 
+local target_yaw = 0
+
 --------------------------------
 ------------ Motors ------------
 
@@ -118,19 +120,21 @@ local function AutoTravel()
   -- Ex : before -> (x, z)
   --      now    -> (z, x)
   local normalised_yaw = yaw + 180
-  local target_yaw = math.atan((cur_pos.x - target_pos.x) / (cur_pos.z - target_pos.z))
-  local angle_diff  = yaw - target_yaw
+  local delta_X, delta_Y = (cur_pos.z - target_pos.z), (target_pos.x - cur_pos.x)
+  target_yaw = atan(abs(delta_Y / delta_X))
+  if delta_X < 0 and delta_Y > 0 then
+    target_yaw = target_yaw - 180
+  elseif delta_X < 0 and delta_Y < 0 then
+    target_yaw = target_yaw + 180
+  elseif delta_X > 0 and delta_Y < 0 then
+    target_yaw = 360 - target_yaw
+  end
+  
+  local angle_diff  = normalised_yaw - target_yaw
   
   mtr_speed(1)
   
-  --Broken, needs to be fixed
-  if ((angle_diff < 180 and angle_diff > 0)         -- Turn left
-  or (angle_diff >= -180 and angle_diff <= 0 )) then
-    mtr_r(0)
-  elseif ((angle_diff > 180 and angle_diff > 0)     -- Turn right
-  or (angle_diff <= -180 and angle_diff <= 0 )) then
-    mtr_l(0)
-  end
+  target_yaw = target_yaw - 180
 end
 
 local function Update()
@@ -144,32 +148,36 @@ local function Update()
   local tmpx, tmpy, tmpz = ship.getPosition()
   local tmpyaw  = ship.getYaw()
   linear_speed  = distance({cur_pos.x, cur_pos.y, cur_pos.z}, {tmpx, tmpy, tmpz})
-  angular_speed = yaw - tmpyaw
+  angular_speed = abs(yaw - tmpyaw)
 end
 
 local function Draw()
   --Gui Handling--
   local cursor_X, cursor_Y = term.getCursor()
   
-  for i=1,7 do
+  for i=1,9 do
     term.setCursor(1, i)
     term.clearLine()
   end
   term.setCursor(1,1)
-  term.write("cur_pos    : "..round(cur_pos.x,2)..", "..round(cur_pos.y,2)..", "..round(cur_pos.z,2))
+  term.write("cur_pos       : "..round(cur_pos.x,2)..", "..round(cur_pos.y,2)..", "..round(cur_pos.z,2))
   term.setCursor(1,2)
-  term.write("target_pos : "..round(target_pos.x,2)..", "..round(target_pos.y,2)..", "..round(target_pos.z,2))
+  term.write("target_pos    : "..round(target_pos.x,2)..", "..round(target_pos.y,2)..", "..round(target_pos.z,2))
   term.setCursor(1,3)
-  term.write("Distance   : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
+  term.write("Distance      : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
   term.setCursor(1,4)
-  term.write("Yaw        : "..round(yaw, 4))
+  term.write("Yaw           : "..round(yaw, 4))
   term.setCursor(1,5)
-  term.write("Linear speed      : "..round(linear_speed, 4).." m/s")
+  term.write("Linear speed  : "..round(linear_speed, 4).." m/s")
   term.setCursor(1,6)
-  term.write("Angular speed      : "..round(angular_speed, 4).." deg/s")
-  
-  
+  term.write("Angular speed : "..round(angular_speed, 4).." deg/s")
   term.setCursor(1,7)
+  term.write("target_yaw    : "..target_yaw.." deg")
+  term.setCursor(1,8)
+  term.write("cur_yaw       : "..yaw.." deg")
+  
+  
+  term.setCursor(1,9)
   term.write("----------------")
   term.setCursor(cursor_X, cursor_Y)
 end
@@ -193,7 +201,6 @@ local main_thread = thread.create(function()
 end)
 
 local user_input_thread = thread.create(function()
-  ---[[
   while user_input~="exit" do
     term.setCursor(1, term.window.height)
     term.clearLine()
@@ -213,9 +220,8 @@ local user_input_thread = thread.create(function()
       goToDest = false;
     end
   end
-  --]]
 end)
 
-thread.waitForAny({ main_thread--[[, user_input_thread]] })
+thread.waitForAny({ main_thread, user_input_thread })
 mtr_brake()
 os.exit(0)
