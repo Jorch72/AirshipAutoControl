@@ -20,22 +20,21 @@ mtr_spin(%)      + clockwise, - counterclockwise.
 
 ------- Global variables -------
 
-local MAIN_LOOP        = true
+local MAIN_LOOP = true
 
-local cur_pos          = { x=0, y=0, z=0 } -- (x, y, z)
-local target_pos       = { x=0, y=0, z=0 } -- (x, y, z)
+local cur_pos    = { x=0, y=0, z=0 } -- (x, y, z)
+local target_pos = { x=0, y=0, z=0 } -- (x, y, z)
 
-local yaw   = ship.getYaw()
-local roll  = ship.getRoll()
-local pitch = ship.getPitch()
+local yaw   = 0
+local roll  = 0
+local pitch = 0
 
-local linear_speed = 0        -- meters per second
+local linear_speed  = 0        -- meters per second
 local angular_speed = 0
 
-local user_input       = nil
-local user_input_ready = true
+local user_input = nil
 
-local goToDest         = false
+local goToDest   = false
 
 local target_yaw = 0
 
@@ -94,8 +93,6 @@ local function HardwareInit()
   if not component.isAvailable("ship_interface") then
     print("ship_interface component not available!")
     os.exit(1)
-  elseif not component.isAvailable("gpu") then
-    os.exit(1)
   end
 end
 --------------------------------
@@ -121,7 +118,8 @@ local function AutoTravel()
   --      now    -> (z, x)
   local normalised_yaw = yaw + 180
   local delta_X, delta_Y = (cur_pos.z - target_pos.z), (target_pos.x - cur_pos.x)
-  target_yaw = atan(abs(delta_Y / delta_X))
+  
+  target_yaw = math.atan(math.abs(delta_Y / delta_X))
   if delta_X < 0 and delta_Y > 0 then
     target_yaw = target_yaw - 180
   elseif delta_X < 0 and delta_Y < 0 then
@@ -138,48 +136,53 @@ local function AutoTravel()
 end
 
 local function Update()
+  local x1, y1, z1 = ship.getPosition()
+  local yaw1 = ship.getYaw()
+  os.sleep(1)
+  local x2, y2, z2 = ship.getPosition()
+  local yaw2  = ship.getYaw() + 180
+  if yaw2 > 180 then  yaw2 = yaw2 - 360  end
+  linear_speed  = distance({x1, y1, z1}, {x2, y2, z2})
+  angular_speed = math.abs(yaw1 - yaw2)
+  
   cur_pos.x, cur_pos.y, cur_pos.z = ship.getPosition()
   
-  yaw   = ship.getYaw()
+  yaw   = ship.getYaw() + 180
+  if yaw > 180 then  yaw = yaw - 360  end
+  
   roll  = ship.getRoll()
   pitch = ship.getPitch()
-  
-  os.sleep(1)
-  local tmpx, tmpy, tmpz = ship.getPosition()
-  local tmpyaw  = ship.getYaw()
-  linear_speed  = distance({cur_pos.x, cur_pos.y, cur_pos.z}, {tmpx, tmpy, tmpz})
-  angular_speed = abs(yaw - tmpyaw)
 end
 
 local function Draw()
   --Gui Handling--
-  local cursor_X, cursor_Y = term.getCursor()
-  
-  for i=1,9 do
-    term.setCursor(1, i)
-    term.clearLine()
+  if component.isAvailable("gpu") then
+    local cursor_X, cursor_Y = term.getCursor()
+    
+    for i=1, 8 do
+      term.setCursor(1, i)
+      term.clearLine()
+    end
+    term.setCursor(1,1)
+    term.write("cur_pos       : "..round(cur_pos.x,2)..", "..round(cur_pos.y,2)..", "..round(cur_pos.z,2))
+    term.setCursor(1,2)
+    term.write("target_pos    : "..round(target_pos.x,2)..", "..round(target_pos.y,2)..", "..round(target_pos.z,2))
+    term.setCursor(1,3)
+    term.write("Distance      : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
+    term.setCursor(1,4)
+    term.write("Yaw           : "..round(yaw, 4).." deg")
+    term.setCursor(1,5)
+    term.write("Linear speed  : "..round(linear_speed, 4).." m/s")
+    term.setCursor(1,6)
+    term.write("Angular speed : "..round(angular_speed, 4).." deg/s")
+    term.setCursor(1,7)
+    term.write("target_yaw    : "..round(target_yaw, 4).." deg")
+    
+    
+    term.setCursor(1,8)
+    term.write("----------------")
+    term.setCursor(cursor_X, cursor_Y)
   end
-  term.setCursor(1,1)
-  term.write("cur_pos       : "..round(cur_pos.x,2)..", "..round(cur_pos.y,2)..", "..round(cur_pos.z,2))
-  term.setCursor(1,2)
-  term.write("target_pos    : "..round(target_pos.x,2)..", "..round(target_pos.y,2)..", "..round(target_pos.z,2))
-  term.setCursor(1,3)
-  term.write("Distance      : "..round(distance({cur_pos.x,cur_pos.y,cur_pos.z}, {target_pos.x,target_pos.y,target_pos.z}),4).." m")
-  term.setCursor(1,4)
-  term.write("Yaw           : "..round(yaw, 4))
-  term.setCursor(1,5)
-  term.write("Linear speed  : "..round(linear_speed, 4).." m/s")
-  term.setCursor(1,6)
-  term.write("Angular speed : "..round(angular_speed, 4).." deg/s")
-  term.setCursor(1,7)
-  term.write("target_yaw    : "..target_yaw.." deg")
-  term.setCursor(1,8)
-  term.write("cur_yaw       : "..yaw.." deg")
-  
-  
-  term.setCursor(1,9)
-  term.write("----------------")
-  term.setCursor(cursor_X, cursor_Y)
 end
 --------------------------------
 
@@ -189,21 +192,19 @@ local main_thread = thread.create(function()
   while MAIN_LOOP do
     Update()
     Draw()
+    os.sleep(0)
     
     if goToDest then
       AutoTravel()
     else
       mtr_brake()
     end
-    
-    os.sleep(0)
   end
 end)
 
 local user_input_thread = thread.create(function()
+  term.setCursor(1, 9)
   while user_input~="exit" do
-    term.setCursor(1, term.window.height)
-    term.clearLine()
     io.write("> ")
     user_input = io.read()
     
